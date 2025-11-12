@@ -16,25 +16,18 @@ import { authAPI } from './services/api';
 
 const USE_MOCK = false; // toggle for demo/testing
 
-const App = () => {
+const AppContent = () => {
   const navigate = useNavigate();
 
   const [darkMode, setDarkMode] = useLocalStorage('darkMode', false);
-  const [currentPage, setCurrentPage] = useLocalStorage('currentPage', 'login');
   const [user, setUser] = useLocalStorage('user', null);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [loginForm, setLoginForm] = React.useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = React.useState({ name: '', email: '', password: '' });
   const [subscription, setSubscription] = useLocalStorage('subscription', null);
 
-  // Keep currentPage synced with user (run when user changes)
-  useEffect(() => {
-    if (user) {
-      setCurrentPage('dashboard');
-      // if you want auto-redirect on login:
-      navigate('/dashboard', { replace: true });
-    }
-  }, [user, navigate, setCurrentPage]);
+  // REMOVED: Auto-navigation useEffect that was causing loops
+  // Navigation is now handled properly by each action
 
   // Real login handler (calls backend). Falls back to mock when USE_MOCK=true
   const handleLogin = async (payloadOrEvent) => {
@@ -48,7 +41,6 @@ const App = () => {
 
     try {
       if (USE_MOCK) {
-        // demo-only: loginMock might be synchronous or async in your code; ensure await
         const mockUser = await loginMock({ email: loginForm.email, password: loginForm.password });
         setUser(mockUser);
         localStorage.setItem('user', JSON.stringify(mockUser));
@@ -62,7 +54,6 @@ const App = () => {
         password: loginForm.password
       });
 
-      // Try to read payload (match backend response shape)
       const payload = res?.data?.data || res?.data;
       const returnedUser = payload?.user;
       const accessToken = payload?.accessToken || payload?.token;
@@ -75,16 +66,13 @@ const App = () => {
         localStorage.setItem('user', JSON.stringify(returnedUser));
       }
 
-      // navigate to dashboard
       navigate('/dashboard', { replace: true });
     } catch (err) {
       console.error('handleLogin error:', err?.response?.data || err.message || err);
-      // bubble up or show error in UI. Keep same behavior you had: your Login component shows toast/errors.
       throw err;
     }
   };
 
-  // Register handler (real or mock)
   const handleRegister = async (payloadOrEvent) => {
     if (payloadOrEvent && typeof payloadOrEvent === 'object' && payloadOrEvent.id) {
       setUser(payloadOrEvent);
@@ -102,7 +90,6 @@ const App = () => {
         return;
       }
 
-      // Optionally call backend register endpoint via authAPI.register(...)
       const res = await authAPI.register({
         name: registerForm.name,
         email: registerForm.email,
@@ -158,7 +145,6 @@ const App = () => {
       {user && (
         <Navigation
           user={user}
-          setCurrentPage={setCurrentPage}
           darkMode={darkMode}
           setDarkMode={setDarkMode}
           mobileMenuOpen={mobileMenuOpen}
@@ -168,40 +154,120 @@ const App = () => {
       )}
 
       <Routes>
+        {/* Public Routes */}
         <Route
           path="/login"
           element={
-            <Login
-              loginForm={loginForm}
-              setLoginForm={setLoginForm}
-              handleLogin={handleLogin}
-              darkMode={darkMode}
-            />
+            user ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <Login
+                loginForm={loginForm}
+                setLoginForm={setLoginForm}
+                handleLogin={handleLogin}
+                darkMode={darkMode}
+              />
+            )
           }
         />
+        
         <Route
           path="/register"
           element={
-            <Register
-              registerForm={registerForm}
-              setRegisterForm={setRegisterForm}
-              handleRegister={handleRegister}
-              darkMode={darkMode}
-              setLoginForm={setLoginForm}
-            />
+            user ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <Register
+                registerForm={registerForm}
+                setRegisterForm={setRegisterForm}
+                handleRegister={handleRegister}
+                darkMode={darkMode}
+                setLoginForm={setLoginForm}
+              />
+            )
           }
         />
-        <Route path="/plans" element={user ? <Plans handleSubscribe={handleSubscribe} darkMode={darkMode} /> : <Navigate to="/login" />} />
-        <Route path="/dashboard" element={user ? <Dashboard user={user} subscription={subscription} darkMode={darkMode} setUser={setUser} /> : <Navigate to="/login" />} />
-        <Route path="/admin" element={user?.role === 'admin' ? <AdminDashboard darkMode={darkMode} /> : <Navigate to="/login" />}>
-          <Route index element={<Navigate to="plans" replace />} />
-          <Route path="plans" element={<AdminPlans darkMode={darkMode} />} />
-          <Route path="subscriptions" element={<AdminSubscriptions darkMode={darkMode} />} />
-        </Route>
-        <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} />} />
+
+        {/* Protected User Routes */}
+        <Route 
+          path="/plans" 
+          element={
+            user ? (
+              <Plans handleSubscribe={handleSubscribe} darkMode={darkMode} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+        
+        <Route 
+          path="/dashboard" 
+          element={
+            user ? (
+              <Dashboard 
+                user={user} 
+                subscription={subscription} 
+                darkMode={darkMode} 
+                setUser={setUser} 
+              />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+
+        {/* Admin Routes - FIXED: Flattened structure */}
+        <Route 
+          path="/admin" 
+          element={
+            user?.role === 'admin' ? (
+              <AdminDashboard darkMode={darkMode} />
+            ) : (
+              <Navigate to="/dashboard" replace />
+            )
+          } 
+        />
+        
+        <Route 
+          path="/admin/plans" 
+          element={
+            user?.role === 'admin' ? (
+              <AdminPlans darkMode={darkMode} />
+            ) : (
+              <Navigate to="/dashboard" replace />
+            )
+          } 
+        />
+        
+        <Route 
+          path="/admin/subscriptions" 
+          element={
+            user?.role === 'admin' ? (
+              <AdminSubscriptions darkMode={darkMode} />
+            ) : (
+              <Navigate to="/dashboard" replace />
+            )
+          } 
+        />
+
+        {/* Default & Catch-all Routes */}
+        <Route 
+          path="/" 
+          element={<Navigate to={user ? "/dashboard" : "/login"} replace />} 
+        />
+        
+        <Route 
+          path="*" 
+          element={<Navigate to={user ? "/dashboard" : "/login"} replace />} 
+        />
       </Routes>
     </div>
   );
+};
+
+// Main App wrapper with BrowserRouter
+const App = () => {
+  return <AppContent />;
 };
 
 export default App;

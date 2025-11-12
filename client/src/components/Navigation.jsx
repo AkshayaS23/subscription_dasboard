@@ -1,6 +1,6 @@
 // src/components/Navigation.jsx
 import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { Crown, LogOut, Menu, X } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 import MobileMenu from './MobileMenu';
@@ -13,18 +13,16 @@ export default function Navigation({
   setMobileMenuOpen,
   handleLogout
 }) {
-  const navigate = useNavigate();
   const textClass = darkMode ? 'text-gray-100' : 'text-gray-900';
   const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
   const cardBg = darkMode ? 'bg-gray-800' : 'bg-white';
 
-  const onNavigate = (path) => {
-    console.log('nav click ->', path);
-    navigate(path);
-  };
-
   const linkClass = ({ isActive }) =>
-    `px-2 py-1 rounded ${isActive ? 'text-indigo-600 font-semibold' : textSecondary}`;
+    `px-3 py-2 rounded-lg transition-colors ${
+      isActive 
+        ? 'text-indigo-600 font-semibold bg-indigo-50 dark:bg-indigo-900/20' 
+        : `${textSecondary} hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/10`
+    }`;
 
   return (
     <nav className={`${cardBg} shadow-lg z-50`}>
@@ -37,30 +35,34 @@ export default function Navigation({
 
           {user && (
             <div className="hidden md:flex items-center space-x-6">
-              <NavLink to="/dashboard" className={linkClass} onClick={() => onNavigate('/dashboard')}>
+              <NavLink to="/dashboard" className={linkClass}>
                 Dashboard
               </NavLink>
 
-              <NavLink to="/plans" className={linkClass} onClick={() => onNavigate('/plans')}>
+              <NavLink to="/plans" className={linkClass}>
                 Plans
               </NavLink>
 
               {user.role === 'admin' && (
-                <NavLink to="/admin" className={linkClass} onClick={() => onNavigate('/admin')}>
-                  Admin
-                </NavLink>
+                <>
+                  <NavLink to="/admin" className={linkClass}>
+                    Admin Dashboard
+                  </NavLink>
+                  <NavLink to="/admin/plans" className={linkClass}>
+                    Manage Plans
+                  </NavLink>
+                  <NavLink to="/admin/subscriptions" className={linkClass}>
+                    Subscriptions
+                  </NavLink>
+                </>
               )}
 
-              <div className="flex items-center space-x-4">
-                <span className={textSecondary}>{user.name}</span>
+              <div className="flex items-center space-x-4 ml-4">
+                <span className={`${textSecondary} text-sm`}>{user.name}</span>
                 <ThemeToggle darkMode={darkMode} setDarkMode={setDarkMode} />
                 <button
-                  onClick={() => {
-                    console.log('logout click');
-                    handleLogout();
-                    navigate('/login');
-                  }}
-                  className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                  onClick={handleLogout}
+                  className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                 >
                   <LogOut className="w-4 h-4" />
                   <span>Logout</span>
@@ -70,7 +72,11 @@ export default function Navigation({
           )}
 
           {user && (
-            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden">
+            <button 
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)} 
+              className="md:hidden" 
+              aria-label="mobile-menu-toggle"
+            >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           )}
@@ -80,11 +86,7 @@ export default function Navigation({
           user={user}
           mobileMenuOpen={mobileMenuOpen}
           setMobileMenuOpen={setMobileMenuOpen}
-          navigate={navigate}
-          handleLogout={() => {
-            handleLogout();
-            navigate('/login');
-          }}
+          handleLogout={handleLogout}
         />
       </div>
     </nav>

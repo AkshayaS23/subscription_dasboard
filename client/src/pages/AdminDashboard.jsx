@@ -8,9 +8,8 @@ export default function AdminDashboard({ darkMode }) {
 
   return (
     <div className="container mx-auto px-4 py-10">
-      <h1 className={`text-3xl font-bold mb-6 ${textClass}`}>Admin Dashboard</h1>
+      <h1 className={`text-3xl font-bold mb-6 ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>Admin Dashboard</h1>
 
-      {/* Navigation Tabs */}
       <div className="flex space-x-4 mb-8">
         <NavLink
           to="plans"
@@ -43,7 +42,7 @@ export default function AdminDashboard({ darkMode }) {
       </div>
 
       {/* Nested content */}
-      <div className={`${cardBg} p-6 rounded-2xl shadow-xl`}>
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-2xl shadow-xl`}>
         <Outlet />
       </div>
     </div>

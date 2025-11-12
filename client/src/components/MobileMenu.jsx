@@ -1,62 +1,81 @@
+// src/components/MobileMenu.jsx
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
+import { LogOut } from 'lucide-react';
 
-export default function MobileMenu({ user, mobileMenuOpen, setMobileMenuOpen, handleLogout }) {
-  const navigate = useNavigate();
+export default function MobileMenu({ 
+  user, 
+  mobileMenuOpen, 
+  setMobileMenuOpen, 
+  handleLogout 
+}) {
+  if (!mobileMenuOpen) return null;
 
-  if (!user) return null;
+  const linkClass = ({ isActive }) =>
+    `block px-4 py-3 rounded-lg transition-colors ${
+      isActive 
+        ? 'bg-indigo-600 text-white font-semibold' 
+        : 'text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
+    }`;
 
-  const handleNavigate = (path) => {
-    console.log('MobileMenu navigate ->', path);
-    setMobileMenuOpen(false); // close menu after navigation
-    // give slight delay so menu close animation (if any) can start
-    setTimeout(() => navigate(path), 50);
+  const handleLinkClick = () => {
+    setMobileMenuOpen(false);
   };
 
   return (
-    // use a dedicated debug class and a high z-index to avoid being behind other elements
-    <div
-      className={`mobile-menu-debug md:hidden mt-4 space-y-2 z-50`}
-      role="menu"
-      aria-hidden={!mobileMenuOpen}
-      style={{ display: mobileMenuOpen ? 'block' : 'none', position: 'absolute', top: '72px', left: 0, right: 0 }}
-    >
-      <div className="bg-white dark:bg-gray-800 p-4 shadow-lg rounded-md mx-4">
-        <button
-          onClick={() => handleNavigate('/dashboard')}
-          className="block w-full text-left px-4 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-        >
-          Dashboard
-        </button>
+    <div className="md:hidden mt-4 space-y-2 pb-4">
+      <NavLink 
+        to="/dashboard" 
+        className={linkClass}
+        onClick={handleLinkClick}
+      >
+        Dashboard
+      </NavLink>
 
-        <button
-          onClick={() => handleNavigate('/plans')}
-          className="block w-full text-left px-4 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-        >
-          Plans
-        </button>
+      <NavLink 
+        to="/plans" 
+        className={linkClass}
+        onClick={handleLinkClick}
+      >
+        Plans
+      </NavLink>
 
-        {user.role === 'admin' && (
-          <button
-            onClick={() => handleNavigate('/admin')}
-            className="block w-full text-left px-4 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+      {user?.role === 'admin' && (
+        <>
+          <NavLink 
+            to="/admin" 
+            className={linkClass}
+            onClick={handleLinkClick}
           >
-            Admin
-          </button>
-        )}
+            Admin Dashboard
+          </NavLink>
+          <NavLink 
+            to="/admin/plans" 
+            className={linkClass}
+            onClick={handleLinkClick}
+          >
+            Manage Plans
+          </NavLink>
+          <NavLink 
+            to="/admin/subscriptions" 
+            className={linkClass}
+            onClick={handleLinkClick}
+          >
+            Subscriptions
+          </NavLink>
+        </>
+      )}
 
-        <button
-          onClick={() => {
-            console.log('MobileMenu logout clicked');
-            handleLogout();
-            setMobileMenuOpen(false);
-            setTimeout(() => navigate('/login'), 50);
-          }}
-          className="block w-full text-left px-4 py-2 text-red-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-        >
-          Logout
-        </button>
-      </div>
+      <button
+        onClick={() => {
+          setMobileMenuOpen(false);
+          handleLogout();
+        }}
+        className="w-full flex items-center space-x-2 px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+      >
+        <LogOut className="w-4 h-4" />
+        <span>Logout</span>
+      </button>
     </div>
   );
 }

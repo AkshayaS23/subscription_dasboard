@@ -14,7 +14,7 @@ const paymentRoutes = require('./routes/payment.routes'); // <-- payment routes 
 const app = express();
 
 // Middleware
-const FRONTEND_ORIGIN = process.env.CLIENT_URL;
+const FRONTEND_ORIGIN = process.env.CLIENT_URL || 'http://localhost:5173';
 
 app.use(cors({
   origin: FRONTEND_ORIGIN,
