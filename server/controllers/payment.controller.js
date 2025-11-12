@@ -84,10 +84,12 @@ exports.stripeWebhook = async (req, res) => {
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
   let event;
 
+  // ✅ Verify Stripe signature
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    console.log(`✅ Webhook verified: ${event.type}`);
   } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
+    console.error('❌ Webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -95,36 +97,69 @@ exports.stripeWebhook = async (req, res) => {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object;
-        const { userId, planId } = session.metadata;
+        const { userId, planId } = session.metadata || {};
+
+        if (!userId || !planId) {
+          console.error('⚠️ Missing metadata in checkout session');
+          break;
+        }
+
         const plan = await Plan.findById(planId);
+        if (!plan) {
+          console.error('⚠️ Plan not found for webhook planId:', planId);
+          break;
+        }
+
         const startDate = new Date();
         const endDate = new Date(startDate);
         endDate.setDate(endDate.getDate() + plan.duration);
 
-        await Subscription.create({
+        const existing = await Subscription.findOne({
           user: userId,
           plan: planId,
-          startDate,
-          endDate,
           status: 'active',
-          paymentId: session.payment_intent,
-          amount: plan.price
+          endDate: { $gte: new Date() }
         });
-        console.log('Subscription created via webhook for user:', userId);
+
+        if (existing) {
+          console.log(`⚠️ Subscription already active for user ${userId}`);
+        } else {
+          await Subscription.create({
+            user: userId,
+            plan: planId,
+            startDate,
+            endDate,
+            status: 'active',
+            paymentId: session.payment_intent,
+            amount: plan.price,
+          });
+          console.log('✅ Subscription created via webhook for user:', userId);
+        }
+
         break;
       }
-      case 'payment_intent.succeeded':
-        console.log('Payment succeeded:', event.data.object.id);
-        break;
-      case 'payment_intent.payment_failed':
-        console.log('Payment failed:', event.data.object.id);
-        break;
-      default:
-        console.log(`Unhandled event type ${event.type}`);
-    }
-  } catch (err) {
-    console.error('Webhook processing error:', err);
-  }
 
-  res.json({ received: true });
+      case 'invoice.payment_succeeded':
+        console.log('✅ Invoice paid:', event.data.object.id);
+        break;
+
+      case 'payment_intent.succeeded':
+        console.log('💰 Payment succeeded:', event.data.object.id);
+        break;
+
+      case 'payment_intent.payment_failed':
+        console.log('❌ Payment failed:', event.data.object.id);
+        break;
+
+      default:
+        console.log(`ℹ️ Unhandled event type: ${event.type}`);
+    }
+
+    // Always respond to Stripe
+    res.status(200).json({ received: true });
+  } catch (err) {
+    console.error('🚨 Webhook handler error:', err);
+    // Respond 500 so Stripe retries automatically
+    res.status(500).send('Webhook handler error');
+  }
 };
