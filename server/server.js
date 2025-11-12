@@ -14,7 +14,13 @@ const paymentRoutes = require('./routes/payment.routes'); // <-- payment routes 
 const app = express();
 
 // Middleware
-app.use(cors());
+const FRONTEND_ORIGIN = process.env.CLIENT_URL;
+
+app.use(cors({
+  origin: FRONTEND_ORIGIN,
+  credentials: true,
+}));
+
 
 // IMPORTANT: raw body parser for Stripe webhooks must be mounted BEFORE express.json()
 // This ensures the /api/webhook route receives the raw request body required for signature verification.
@@ -65,6 +71,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });
 });
 
+// Root route
+app.get('/', (req, res) => {
+  res.send('🚀 Server is live and running on Vercel!');
+});
+
 // Error Handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -75,7 +86,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ---------- Add/replace at the end of server/server.js ----------
 
 const PORT = process.env.PORT || 5000;
 
