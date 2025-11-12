@@ -2,64 +2,135 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const Subscription = require('../models/Subscription');
 const Plan = require('../models/Plan');
+const mongoose = require('mongoose');
 
+/**
+ * Helper: check if a value is a valid Mongo ObjectId
+ */
+function isObjectId(value) {
+  try {
+    return mongoose.Types.ObjectId.isValid(String(value));
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Create a Stripe Checkout session for a plan
+ */
 exports.createCheckoutSession = async (req, res) => {
   try {
-    const { planId } = req.body;
-    const userId = req.user.id; // set by auth middleware
+    const { planId, priceId } = req.body;
+    // Prefer authenticated user id from middleware, but allow client to pass userId if needed
+    const userId = (req.user && req.user.id) || req.body.userId;
 
-    const plan = await Plan.findById(planId);
-    if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: user required' });
+    }
 
+    // Resolve plan robustly: try _id (ObjectId), then priceId, then slug/code fields
+    let plan = null;
+
+    if (planId && isObjectId(planId)) {
+      plan = await Plan.findById(planId);
+    }
+
+    if (!plan && priceId) {
+      plan = await Plan.findOne({ priceId });
+    }
+
+    if (!plan && planId && typeof planId === 'string') {
+      plan = await Plan.findOne({
+        $or: [
+          { priceId: planId },
+          { slug: planId },
+          { code: planId }
+        ]
+      });
+    }
+
+    if (!plan) {
+      return res.status(404).json({ success: false, message: 'Plan not found' });
+    }
+
+    // Prevent creating session if user already has an active subscription
     const existing = await Subscription.findOne({
       user: userId,
       status: 'active',
       endDate: { $gte: new Date() }
     });
-    if (existing) return res.status(400).json({ success: false, message: 'You already have an active subscription' });
 
+    if (existing) {
+      return res.status(400).json({ success: false, message: 'You already have an active subscription' });
+    }
+
+    // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
         price_data: {
           currency: 'usd',
           product_data: { name: plan.name, description: `${plan.duration} days subscription` },
-          unit_amount: Math.round(plan.price * 100),
+          unit_amount: Math.round((plan.price || 0) * 100),
         },
         quantity: 1,
       }],
       mode: 'payment',
-      success_url: `${process.env.CLIENT_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}&plan_id=${planId}`,
+      success_url: `${process.env.CLIENT_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}&plan_id=${plan._id}`,
       cancel_url: `${process.env.CLIENT_URL}/plans?cancelled=true`,
       client_reference_id: userId,
-      metadata: { userId, planId, planName: plan.name }
+      metadata: {
+        userId,
+        planId: plan._id.toString(),
+        planName: plan.name,
+        priceId: plan.priceId || ''
+      }
     });
 
-    res.status(200).json({ success: true, sessionId: session.id, url: session.url });
+    return res.status(200).json({ success: true, sessionId: session.id, url: session.url });
   } catch (error) {
     console.error('Checkout session error:', error);
-    res.status(500).json({ success: false, message: 'Failed to create checkout session', error: error.message });
+    return res.status(500).json({ success: false, message: 'Failed to create checkout session', error: error.message });
   }
 };
 
+/**
+ * Handle client redirect after payment success (non-webhook flow).
+ * This requires the user to be authenticated for the route (so req.user exists).
+ */
 exports.handlePaymentSuccess = async (req, res) => {
   try {
     const session_id = req.query.session_id;
     const plan_id = req.query.plan_id;
-    const userId = req.user.id;
+    const userId = req.user && req.user.id;
 
-    if (!session_id || !plan_id) return res.status(400).json({ success: false, message: 'Missing params' });
+    if (!session_id || !plan_id) {
+      return res.status(400).json({ success: false, message: 'Missing params' });
+    }
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
 
     const session = await stripe.checkout.sessions.retrieve(session_id);
+
     if (session.payment_status === 'paid') {
-      const plan = await Plan.findById(plan_id);
+      // safe find plan (plan_id might be object id or string)
+      let plan = null;
+      if (isObjectId(plan_id)) plan = await Plan.findById(plan_id);
+      if (!plan) plan = await Plan.findOne({ $or: [{ priceId: plan_id }, { slug: plan_id }, { code: plan_id }] });
+
+      if (!plan) {
+        return res.status(404).json({ success: false, message: 'Plan not found' });
+      }
+
       const startDate = new Date();
       const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + plan.duration);
+      endDate.setDate(endDate.getDate() + (plan.duration || 30));
 
       const subscription = await Subscription.create({
         user: userId,
-        plan: plan_id,
+        plan: plan._id,
         startDate,
         endDate,
         status: 'active',
@@ -72,19 +143,21 @@ exports.handlePaymentSuccess = async (req, res) => {
       return res.status(200).json({ success: true, message: 'Subscription activated successfully', data: subscription });
     }
 
-    res.status(400).json({ success: false, message: 'Payment not completed' });
+    return res.status(400).json({ success: false, message: 'Payment not completed' });
   } catch (error) {
     console.error('Payment success error:', error);
-    res.status(500).json({ success: false, message: 'Failed to process payment', error: error.message });
+    return res.status(500).json({ success: false, message: 'Failed to process payment', error: error.message });
   }
 };
 
+/**
+ * Stripe webhook handler (expects raw body, mounted with express.raw in server)
+ */
 exports.stripeWebhook = async (req, res) => {
   const sig = req.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
   let event;
 
-  // ✅ Verify Stripe signature
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
     console.log(`✅ Webhook verified: ${event.type}`);
@@ -100,11 +173,15 @@ exports.stripeWebhook = async (req, res) => {
         const { userId, planId } = session.metadata || {};
 
         if (!userId || !planId) {
-          console.error('⚠️ Missing metadata in checkout session');
+          console.error('⚠️ Missing metadata in checkout session', { metadata: session.metadata });
           break;
         }
 
-        const plan = await Plan.findById(planId);
+        // Resolve plan
+        let plan = null;
+        if (isObjectId(planId)) plan = await Plan.findById(planId);
+        if (!plan) plan = await Plan.findOne({ $or: [{ priceId: planId }, { slug: planId }, { code: planId }] });
+
         if (!plan) {
           console.error('⚠️ Plan not found for webhook planId:', planId);
           break;
@@ -112,11 +189,11 @@ exports.stripeWebhook = async (req, res) => {
 
         const startDate = new Date();
         const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + plan.duration);
+        endDate.setDate(endDate.getDate() + (plan.duration || 30));
 
         const existing = await Subscription.findOne({
           user: userId,
-          plan: planId,
+          plan: plan._id,
           status: 'active',
           endDate: { $gte: new Date() }
         });
@@ -126,7 +203,7 @@ exports.stripeWebhook = async (req, res) => {
         } else {
           await Subscription.create({
             user: userId,
-            plan: planId,
+            plan: plan._id,
             startDate,
             endDate,
             status: 'active',
@@ -155,11 +232,10 @@ exports.stripeWebhook = async (req, res) => {
         console.log(`ℹ️ Unhandled event type: ${event.type}`);
     }
 
-    // Always respond to Stripe
-    res.status(200).json({ received: true });
+    // Always respond OK to Stripe
+    return res.status(200).json({ received: true });
   } catch (err) {
     console.error('🚨 Webhook handler error:', err);
-    // Respond 500 so Stripe retries automatically
-    res.status(500).send('Webhook handler error');
+    return res.status(500).send('Webhook handler error');
   }
 };

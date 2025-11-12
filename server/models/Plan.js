@@ -28,6 +28,20 @@ const planSchema = new mongoose.Schema({
       message: 'At least one feature is required'
     }
   },
+  // new: priceId for Stripe or client-side price code
+  priceId: {
+    type: String,
+    trim: true,
+    index: true,
+    default: null
+  },
+  // optional slug (nice-to-have)
+  slug: {
+    type: String,
+    trim: true,
+    index: true,
+    default: null
+  },
   isActive: {
     type: Boolean,
     default: true

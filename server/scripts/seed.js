@@ -18,6 +18,8 @@ const plans = [
       'Email Reports',
       'Community Access'
     ],
+    priceId: 'price_starter_test',
+    slug: 'starter',
     isActive: true
   },
   {
@@ -33,6 +35,8 @@ const plans = [
       'API Access',
       'Team Collaboration'
     ],
+    priceId: 'price_professional_test',
+    slug: 'professional',
     isActive: true
   },
   {
@@ -50,6 +54,8 @@ const plans = [
       'Dedicated Account Manager',
       'SLA Guarantee'
     ],
+    priceId: 'price_enterprise_test',
+    slug: 'enterprise',
     isActive: true
   },
   {
@@ -63,52 +69,66 @@ const plans = [
       'Premium Templates',
       'Advanced Security'
     ],
+    priceId: 'price_annual_pro_test',
+    slug: 'annual-pro',
     isActive: true
   }
 ];
 
 const seedDatabase = async () => {
   try {
-    // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/subscription_dashboard', {
+    const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/subscription_dashboard';
+    await mongoose.connect(MONGO_URI, {
+      dbName: process.env.MONGO_DB_NAME || 'subscription_dashboard',
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
 
     console.log('✅ Connected to MongoDB');
 
-    // Clear existing data
-    await Plan.deleteMany({});
-    await User.deleteMany({});
-    console.log('🗑️  Cleared existing data');
+    // --- PLANS: upsert so script is idempotent ---
+    for (const p of plans) {
+      const existing = await Plan.findOne({ name: p.name });
+      if (existing) {
+        await Plan.updateOne({ _id: existing._id }, { $set: p });
+        console.log(`🔁 Updated plan: ${p.name}`);
+      } else {
+        await Plan.create(p);
+        console.log(`➕ Created plan: ${p.name}`);
+      }
+    }
 
-    // Insert plans
-    const createdPlans = await Plan.insertMany(plans);
-    console.log(`✅ ${createdPlans.length} plans seeded successfully`);
+    // --- USERS: create test/admin if not exist (do NOT delete users in production) ---
+    const adminEmail = 'admin@test.com';
+    const testEmail = 'user@test.com';
 
-    // Create admin user
-    const adminUser = await User.create({
-      name: 'Admin User',
-      email: 'admin@test.com',
-      password: 'admin123',
-      role: 'admin'
-    });
-    console.log('✅ Admin user created (email: admin@test.com, password: admin123)');
+    const adminExists = await User.findOne({ email: adminEmail });
+    if (!adminExists) {
+      await User.create({
+        name: 'Admin User',
+        email: adminEmail,
+        password: 'admin123',
+        role: 'admin'
+      });
+      console.log(`➕ Admin user created: ${adminEmail} / admin123`);
+    } else {
+      console.log(`ℹ️ Admin user already exists: ${adminEmail}`);
+    }
 
-    // Create test user
-    const testUser = await User.create({
-      name: 'Test User',
-      email: 'user@test.com',
-      password: 'user123',
-      role: 'user'
-    });
-    console.log('✅ Test user created (email: user@test.com, password: user123)');
+    const userExists = await User.findOne({ email: testEmail });
+    if (!userExists) {
+      await User.create({
+        name: 'Test User',
+        email: testEmail,
+        password: 'user123',
+        role: 'user'
+      });
+      console.log(`➕ Test user created: ${testEmail} / user123`);
+    } else {
+      console.log(`ℹ️ Test user already exists: ${testEmail}`);
+    }
 
-    console.log('\n🎉 Database seeded successfully!');
-    console.log('\n📝 Test Credentials:');
-    console.log('Admin: admin@test.com / admin123');
-    console.log('User: user@test.com / user123');
-
+    console.log('\n🎉 Database seeding completed.');
     process.exit(0);
   } catch (error) {
     console.error('❌ Error seeding database:', error);
