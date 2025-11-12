@@ -70,22 +70,25 @@ exports.getMySubscription = async (req, res) => {
       user: req.user.id,
       status: 'active',
       endDate: { $gte: new Date() }
-    })
-    .populate('plan', 'name price duration features')
-    .sort({ createdAt: -1 });
+    }).populate('plan', 'name price duration features');
 
-    // Always return 200 and a consistent response shape
-    return res.status(200).json({
-      success: true,
-      subscription: sub || null
-    });
+    if (!sub) {
+      return res.status(200).json({ success: true, subscription: null });
+    }
+
+    const subscription = {
+      id: sub._id,
+      planId: sub.plan._id,
+      planName: sub.plan.name,
+      endDate: sub.endDate,
+      status: sub.status,
+      duration: sub.plan.duration,
+      price: sub.plan.price
+    };
+
+    return res.status(200).json({ success: true, subscription });
   } catch (error) {
-    console.error('getMySubscription error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch subscription',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 

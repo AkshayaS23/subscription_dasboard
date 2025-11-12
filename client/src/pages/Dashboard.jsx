@@ -38,63 +38,47 @@ export default function Dashboard({ user, subscription: propSubscription, darkMo
   }, [propSubscription]);
 
   // If no subscription prop, fetch from backend on mount
-  useEffect(() => {
-    let mounted = true;
-    const loadSubscription = async () => {
-      // don't fetch if parent already provided a subscription
-      if (propSubscription) return;
+useEffect(() => {
+  let mounted = true;
+  const loadSubscription = async () => {
+    if (propSubscription) return;
 
-      setLoadingSub(true);
-      try {
-        const token = localStorage.getItem('accessToken'); // adapt if you store differently
-        const res = await fetch('/api/subscriptions/me', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        });
+    setLoadingSub(true);
+    try {
+      const token = localStorage.getItem('accessToken');
+      const API_ROOT = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || '';
 
-        if (!mounted) return;
+      const res = await fetch(`${API_ROOT}/api/subscriptions/me`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
 
-        if (res.status === 401) {
-          // Not authenticated -> clear subscription and bail
-          setSubscription(null);
-          localStorage.removeItem('subscription');
-          setLoadingSub(false);
-          return;
-        }
+      if (!mounted) return;
 
-        const data = await res.json();
-        if (data && data.subscription) {
-          setSubscription(data.subscription);
-          try {
-            localStorage.setItem('subscription', JSON.stringify(data.subscription));
-          } catch (e) { /* ignore */ }
+      const data = await res.json();
+      console.log("Fetched subscription data:", data);
 
-          // optionally update parent user/subscription state if available (helpful to re-render Plans)
-          if (typeof setUser === 'function') {
-            try {
-              // If you want to attach subscription into user object, do so carefully
-              setUser((prev) => ({ ...prev, subscription: data.subscription }));
-            } catch (e) {
-              console.warn('setUser failed', e);
-            }
-          }
-        } else {
-          setSubscription(null);
-          localStorage.removeItem('subscription');
-        }
-      } catch (err) {
-        console.error('Error fetching subscription:', err);
-      } finally {
-        if (mounted) setLoadingSub(false);
+      if (data && data.subscription) {
+        setSubscription(data.subscription);
+        localStorage.setItem('subscription', JSON.stringify(data.subscription));
+      } else {
+        setSubscription(null);
+        localStorage.removeItem('subscription');
       }
-    };
+    } catch (err) {
+      console.error('Error fetching subscription:', err);
+    } finally {
+      if (mounted) setLoadingSub(false);
+    }
+  };
 
-    loadSubscription();
-    return () => { mounted = false; };
-  }, [propSubscription, setUser]);
+  loadSubscription();
+  return () => { mounted = false; };
+}, [propSubscription]);
+
 
   const showToast = (message, type = 'info', duration = 4000) => {
     const id = Date.now().toString();
