@@ -75,22 +75,31 @@ app.use((err, req, res, next) => {
   });
 });
 
+// ---------- Add/replace at the end of server/server.js ----------
+
 const PORT = process.env.PORT || 5000;
 
-const server = app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
-
-// graceful shutdown
-const shutdown = () => {
-  console.log('Shutting down server...');
-  server.close(() => {
-    mongoose.connection.close(false, () => {
-      console.log('MongoDB connection closed.');
-      process.exit(0);
-    });
+if (require.main === module) {
+  // Running directly (locally) -> start server
+  const server = app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
   });
-};
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+  const shutdown = () => {
+    console.log('Shutting down server...');
+    server.close(() => {
+      mongoose.connection.close(false, () => {
+        console.log('MongoDB connection closed.');
+        process.exit(0);
+      });
+    });
+  };
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+} else {
+  // Imported by Vercel -> export a handler function
+  // Vercel expects `module.exports = (req, res) => { ... }`
+  module.exports = (req, res) => app(req, res);
+}
+
