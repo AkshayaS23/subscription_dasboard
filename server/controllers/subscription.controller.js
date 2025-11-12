@@ -63,10 +63,10 @@ exports.subscribe = async (req, res) => {
   }
 };
 
-// Get user's current subscription
+// Get user's current subscription (updated to return 200 + consistent shape)
 exports.getMySubscription = async (req, res) => {
   try {
-    const subscription = await Subscription.findOne({
+    const sub = await Subscription.findOne({
       user: req.user.id,
       status: 'active',
       endDate: { $gte: new Date() }
@@ -74,25 +74,21 @@ exports.getMySubscription = async (req, res) => {
     .populate('plan', 'name price duration features')
     .sort({ createdAt: -1 });
 
-    if (!subscription) {
-      return res.status(404).json({
-        success: false,
-        message: 'No active subscription found'
-      });
-    }
-
-    res.status(200).json({
+    // Always return 200 and a consistent response shape
+    return res.status(200).json({
       success: true,
-      data: subscription
+      subscription: sub || null
     });
   } catch (error) {
-    res.status(500).json({
+    console.error('getMySubscription error:', error);
+    return res.status(500).json({
       success: false,
       message: 'Failed to fetch subscription',
       error: error.message
     });
   }
 };
+
 
 // Get all subscriptions (Admin only)
 exports.getAllSubscriptions = async (req, res) => {

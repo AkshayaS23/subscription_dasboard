@@ -7,10 +7,11 @@ import { useNavigate } from 'react-router-dom';
 // Initialize Stripe (replace with your publishable key)
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_YOUR_PUBLISHABLE_KEY_HERE');
 
-export default function Plans({ darkMode, subscription, user: propUser }) {
+export default function Plans({ darkMode, subscription: propSubscription, user: propUser }) {
   const navigate = useNavigate();
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [localSubscription, setLocalSubscription] = useState(null);
 
   // fallback mock plans
   const mockPlans = [
@@ -19,11 +20,20 @@ export default function Plans({ darkMode, subscription, user: propUser }) {
     { id: '3', name: 'Enterprise', price: 99.99, priceId: 'price_enterprise_test', duration: 30, features: ['Unlimited Everything', '24/7 Dedicated Support', 'Unlimited Storage', 'White Label', 'API Access', 'Custom Integrations'] },
   ];
 
-  useEffect(() => {
-    if (subscription?.planId) setSelectedPlan(subscription.planId);
-  }, [subscription]);
+  // Helper to normalize subscription object and extract plan id
+  const extractPlanId = (sub) => {
+    if (!sub) return null;
+    // Common shapes:
+    // { planId: '...' } OR { plan: { _id: '...' } } OR { plan: '...' }
+    if (sub.planId) return String(sub.planId);
+    if (sub.plan && (sub.plan._id || sub.plan.id)) return String(sub.plan._id || sub.plan.id);
+    if (typeof sub.plan === 'string') return String(sub.plan);
+    // some controllers return subscription under data or subscription.key; try common fallback
+    if (sub.data && sub.data.planId) return String(sub.data.planId);
+    return null;
+  };
 
-  // Resolve the current user: prefer prop, else try localStorage
+  // try to resolve current user
   const getCurrentUser = () => {
     if (propUser) return propUser;
     try {
@@ -33,11 +43,61 @@ export default function Plans({ darkMode, subscription, user: propUser }) {
     }
   };
 
+  // On mount: load subscription from prop or localStorage
+  useEffect(() => {
+    if (propSubscription) {
+      setLocalSubscription(propSubscription);
+      const pid = extractPlanId(propSubscription);
+      if (pid) setSelectedPlan(pid);
+      return;
+    }
+
+    try {
+      const stored = JSON.parse(localStorage.getItem('subscription') || 'null');
+      if (stored) {
+        setLocalSubscription(stored);
+        const pid = extractPlanId(stored);
+        if (pid) setSelectedPlan(pid);
+      } else {
+        setLocalSubscription(null);
+      }
+    } catch (e) {
+      setLocalSubscription(null);
+    }
+  }, [propSubscription]);
+
+  // Listen for other tabs/components updating subscription in localStorage
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== 'subscription') return;
+      try {
+        const newSub = JSON.parse(e.newValue || 'null');
+        setLocalSubscription(newSub);
+        const pid = extractPlanId(newSub);
+        if (pid) setSelectedPlan(pid);
+      } catch (err) {
+        setLocalSubscription(null);
+        setSelectedPlan(null);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   const currentUser = getCurrentUser();
 
   const cardBg = darkMode ? 'bg-gray-800' : 'bg-white';
   const textClass = darkMode ? 'text-gray-100' : 'text-gray-900';
   const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
+
+  // Decide the canonical current plan id (from prop, localStorage, or null)
+  const currentPlanId = (() => {
+    const fromProp = extractPlanId(propSubscription);
+    if (fromProp) return fromProp;
+    const fromLocal = extractPlanId(localSubscription);
+    if (fromLocal) return fromLocal;
+    return null;
+  })();
 
   const handleSubscribe = async (plan) => {
     if (loading) return;
@@ -74,18 +134,15 @@ export default function Plans({ darkMode, subscription, user: propUser }) {
 
       const session = await resp.json();
 
-      // Expectation: backend should return { url: session.url, success: true }
       if (session.url) {
-        // Recommended: redirect browser to the Checkout URL returned by Stripe
+        // Redirect to Stripe Checkout
         window.location.href = session.url;
         return;
       }
 
-      // Fallback (not recommended): if backend returns sessionId, try legacy redirect
       if (session.sessionId) {
         const stripe = await stripePromise;
         if (!stripe) throw new Error('Stripe failed to initialize.');
-        // NOTE: this may be unsupported in some stripe.js versions
         const { error } = await stripe.redirectToCheckout({ sessionId: session.sessionId });
         if (error) throw error;
         return;
@@ -110,7 +167,7 @@ export default function Plans({ darkMode, subscription, user: propUser }) {
       <div className="grid md:grid-cols-3 gap-8">
         {mockPlans.map((plan, index) => {
           const isActive = selectedPlan === plan.id;
-          const isCurrentPlan = subscription?.planId === plan.id;
+          const isCurrentPlan = String(currentPlanId) === String(plan.id);
 
           return (
             <div key={plan.id} className={`${cardBg} rounded-2xl shadow-xl p-8 transition-all duration-200 ${isActive ? 'border-4 border-indigo-500 scale-105' : 'border border-transparent'}`}>

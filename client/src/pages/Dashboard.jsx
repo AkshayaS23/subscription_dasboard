@@ -1,11 +1,11 @@
 // client/src/pages/Dashboard.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TrendingUp, Check, X, Edit2 } from 'lucide-react';
 import Toast from '../components/Toast';
 import { authAPI } from '../services/api';
 
-export default function Dashboard({ user, subscription, darkMode, setUser }) {
+export default function Dashboard({ user, subscription: propSubscription, darkMode, setUser }) {
   const navigate = useNavigate();
 
   const cardBg = darkMode ? 'bg-gray-800' : 'bg-white';
@@ -18,10 +18,83 @@ export default function Dashboard({ user, subscription, darkMode, setUser }) {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
 
+  // subscription state: prefer propSubscription, else local fetch
+  const [subscription, setSubscription] = useState(propSubscription || null);
+  const [loadingSub, setLoadingSub] = useState(false);
+
   // keep form in sync if parent user changes
-  React.useEffect(() => {
+  useEffect(() => {
     setForm({ name: user?.name || '', email: user?.email || '' });
   }, [user?.name, user?.email]);
+
+  // keep local subscription updated when parent gives a prop
+  useEffect(() => {
+    if (propSubscription) {
+      setSubscription(propSubscription);
+      try {
+        localStorage.setItem('subscription', JSON.stringify(propSubscription));
+      } catch (e) { /* ignore */ }
+    }
+  }, [propSubscription]);
+
+  // If no subscription prop, fetch from backend on mount
+  useEffect(() => {
+    let mounted = true;
+    const loadSubscription = async () => {
+      // don't fetch if parent already provided a subscription
+      if (propSubscription) return;
+
+      setLoadingSub(true);
+      try {
+        const token = localStorage.getItem('accessToken'); // adapt if you store differently
+        const res = await fetch('/api/subscriptions/me', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+
+        if (!mounted) return;
+
+        if (res.status === 401) {
+          // Not authenticated -> clear subscription and bail
+          setSubscription(null);
+          localStorage.removeItem('subscription');
+          setLoadingSub(false);
+          return;
+        }
+
+        const data = await res.json();
+        if (data && data.subscription) {
+          setSubscription(data.subscription);
+          try {
+            localStorage.setItem('subscription', JSON.stringify(data.subscription));
+          } catch (e) { /* ignore */ }
+
+          // optionally update parent user/subscription state if available (helpful to re-render Plans)
+          if (typeof setUser === 'function') {
+            try {
+              // If you want to attach subscription into user object, do so carefully
+              setUser((prev) => ({ ...prev, subscription: data.subscription }));
+            } catch (e) {
+              console.warn('setUser failed', e);
+            }
+          }
+        } else {
+          setSubscription(null);
+          localStorage.removeItem('subscription');
+        }
+      } catch (err) {
+        console.error('Error fetching subscription:', err);
+      } finally {
+        if (mounted) setLoadingSub(false);
+      }
+    };
+
+    loadSubscription();
+    return () => { mounted = false; };
+  }, [propSubscription, setUser]);
 
   const showToast = (message, type = 'info', duration = 4000) => {
     const id = Date.now().toString();
@@ -63,7 +136,6 @@ export default function Dashboard({ user, subscription, darkMode, setUser }) {
         const stored = { ...JSON.parse(localStorage.getItem('user') || '{}'), ...updatedUser };
         localStorage.setItem('user', JSON.stringify(stored));
       } else {
-        // fallback: update what we can locally
         const fallback = { ...JSON.parse(localStorage.getItem('user') || '{}'), name: form.name.trim(), email: form.email.trim() };
         localStorage.setItem('user', JSON.stringify(fallback));
       }
@@ -73,7 +145,6 @@ export default function Dashboard({ user, subscription, darkMode, setUser }) {
         try {
           setUser(updatedUser || { ...user, name: form.name.trim(), email: form.email.trim() });
         } catch (e) {
-          // ignore
           console.warn('setUser failed', e);
         }
       }
@@ -181,11 +252,14 @@ export default function Dashboard({ user, subscription, darkMode, setUser }) {
         {/* Subscription card */}
         <div className={`${cardBg} rounded-2xl shadow-xl p-8`}>
           <h3 className={`text-xl font-bold ${textClass} mb-4`}>Subscription Status</h3>
-          {subscription ? (
+
+          {loadingSub ? (
+            <div>Loading subscription...</div>
+          ) : subscription ? (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className={textSecondary}>Current Plan</span>
-                <span className={`${textClass} font-bold text-xl`}>{subscription.planName}</span>
+                <span className={`${textClass} font-bold text-xl`}>{subscription.plan?.name || subscription.planName || '—'}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className={textSecondary}>Status</span>
