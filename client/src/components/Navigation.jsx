@@ -1,15 +1,31 @@
 // src/components/Navigation.jsx
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { Crown, LogOut, Menu, X } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 import MobileMenu from './MobileMenu';
 
-export default function Navigation({ user, darkMode, setDarkMode, mobileMenuOpen, setMobileMenuOpen, handleLogout }) {
+export default function Navigation({
+  user,
+  darkMode,
+  setDarkMode,
+  mobileMenuOpen,
+  setMobileMenuOpen,
+  handleLogout
+}) {
   const navigate = useNavigate();
   const textClass = darkMode ? 'text-gray-100' : 'text-gray-900';
   const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
   const cardBg = darkMode ? 'bg-gray-800' : 'bg-white';
+
+  // small click debug helper
+  const onNavigate = (path) => {
+    console.log('nav click ->', path);
+    navigate(path);
+  };
+
+  const linkClass = ({ isActive }) =>
+    `px-2 py-1 rounded ${isActive ? 'text-indigo-600 font-semibold' : textSecondary}`;
 
   return (
     <nav className={`${cardBg} shadow-lg`}>
@@ -22,15 +38,32 @@ export default function Navigation({ user, darkMode, setDarkMode, mobileMenuOpen
 
           {user && (
             <div className="hidden md:flex items-center space-x-6">
-              <button onClick={() => navigate('/dashboard')} className={`${textSecondary} hover:text-indigo-600`}>Dashboard</button>
-              <button onClick={() => navigate('/plans')} className={`${textSecondary} hover:text-indigo-600`}>Plans</button>
+              {/* Use NavLink so Router handles active state and navigation reliably */}
+              <NavLink to="/dashboard" className={linkClass} onClick={() => onNavigate('/dashboard')}>
+                Dashboard
+              </NavLink>
+
+              <NavLink to="/plans" className={linkClass} onClick={() => onNavigate('/plans')}>
+                Plans
+              </NavLink>
+
               {user.role === 'admin' && (
-                <button onClick={() => navigate('/admin')} className={`${textSecondary} hover:text-indigo-600`}>Admin</button>
+                <NavLink to="/admin" className={linkClass} onClick={() => onNavigate('/admin')}>
+                  Admin
+                </NavLink>
               )}
+
               <div className="flex items-center space-x-4">
                 <span className={textSecondary}>{user.name}</span>
                 <ThemeToggle darkMode={darkMode} setDarkMode={setDarkMode} />
-                <button onClick={() => { handleLogout(); navigate('/login'); }} className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
+                <button
+                  onClick={() => {
+                    console.log('logout click');
+                    handleLogout();
+                    navigate('/login');
+                  }}
+                  className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                >
                   <LogOut className="w-4 h-4" />
                   <span>Logout</span>
                 </button>
@@ -50,7 +83,10 @@ export default function Navigation({ user, darkMode, setDarkMode, mobileMenuOpen
           mobileMenuOpen={mobileMenuOpen}
           setMobileMenuOpen={setMobileMenuOpen}
           navigate={navigate}
-          handleLogout={() => { handleLogout(); navigate('/login'); }}
+          handleLogout={() => {
+            handleLogout();
+            navigate('/login');
+          }}
         />
       </div>
     </nav>
