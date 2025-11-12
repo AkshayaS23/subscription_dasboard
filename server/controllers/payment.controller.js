@@ -94,61 +94,39 @@ exports.createCheckoutSession = async (req, res) => {
   }
 };
 
-/**
- * Handle client redirect after payment success (non-webhook flow).
- * This requires the user to be authenticated for the route (so req.user exists).
- */
 exports.handlePaymentSuccess = async (req, res) => {
   try {
     const session_id = req.query.session_id;
     const plan_id = req.query.plan_id;
-    const userId = req.user && req.user.id;
 
     if (!session_id || !plan_id) {
       return res.status(400).json({ success: false, message: 'Missing params' });
     }
 
-    if (!userId) {
-      return res.status(401).json({ success: false, message: 'Unauthorized' });
-    }
-
+    // Retrieve session from Stripe to verify status and get client_reference_id
     const session = await stripe.checkout.sessions.retrieve(session_id);
 
-    if (session.payment_status === 'paid') {
-      // safe find plan (plan_id might be object id or string)
-      let plan = null;
-      if (isObjectId(plan_id)) plan = await Plan.findById(plan_id);
-      if (!plan) plan = await Plan.findOne({ $or: [{ priceId: plan_id }, { slug: plan_id }, { code: plan_id }] });
+    // Identify user from session (client_reference_id or metadata.userId)
+    const userId = session.client_reference_id || (session.metadata && session.metadata.userId);
 
-      if (!plan) {
-        return res.status(404).json({ success: false, message: 'Plan not found' });
+    // For UX only: return session & metadata to frontend. Do NOT rely on this to create subscription.
+    // The webhook (checkout.session.completed) should create the subscription server-side.
+    return res.status(200).json({
+      success: true,
+      message: 'Checkout session retrieved',
+      session: {
+        id: session.id,
+        payment_status: session.payment_status,
+        client_reference_id: userId,
+        metadata: session.metadata,
       }
-
-      const startDate = new Date();
-      const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + (plan.duration || 30));
-
-      const subscription = await Subscription.create({
-        user: userId,
-        plan: plan._id,
-        startDate,
-        endDate,
-        status: 'active',
-        paymentId: session.payment_intent,
-        amount: plan.price
-      });
-
-      await subscription.populate('plan', 'name price duration features');
-
-      return res.status(200).json({ success: true, message: 'Subscription activated successfully', data: subscription });
-    }
-
-    return res.status(400).json({ success: false, message: 'Payment not completed' });
+    });
   } catch (error) {
     console.error('Payment success error:', error);
     return res.status(500).json({ success: false, message: 'Failed to process payment', error: error.message });
   }
 };
+
 
 /**
  * Stripe webhook handler (expects raw body, mounted with express.raw in server)

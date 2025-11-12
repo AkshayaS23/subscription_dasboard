@@ -42,11 +42,8 @@ export default function Plans({ darkMode, subscription, user: propUser }) {
   const handleSubscribe = async (plan) => {
     if (loading) return;
 
-    // Re-resolve user at click time (in case it changed)
     const userNow = getCurrentUser();
     if (!userNow) {
-      // friendly: redirect to login page (client-side)
-      // you can also show a toast instead of alert
       alert('Please login to subscribe');
       navigate('/login');
       return;
@@ -56,11 +53,9 @@ export default function Plans({ darkMode, subscription, user: propUser }) {
     setSelectedPlan(plan.id);
 
     try {
-      // Make backend URL explicit so we don't call frontend server by mistake
       const API_ROOT = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') || '';
       const url = API_ROOT ? `${API_ROOT}/api/create-checkout-session` : `/api/create-checkout-session`;
 
-      // Read access token from localStorage (ensure backend auth expects it)
       const token = localStorage.getItem('accessToken');
 
       const resp = await fetch(url, {
@@ -72,7 +67,6 @@ export default function Plans({ darkMode, subscription, user: propUser }) {
         body: JSON.stringify({ planId: plan.id, priceId: plan.priceId, userId: userNow.id })
       });
 
-      // if network or server failure
       if (!resp.ok) {
         const text = await resp.text().catch(() => '');
         throw new Error(`Server responded ${resp.status}: ${text || resp.statusText}`);
@@ -80,17 +74,24 @@ export default function Plans({ darkMode, subscription, user: propUser }) {
 
       const session = await resp.json();
 
-      if (!session.success) {
-        throw new Error(session.message || 'Failed to create checkout session');
+      // Expectation: backend should return { url: session.url, success: true }
+      if (session.url) {
+        // Recommended: redirect browser to the Checkout URL returned by Stripe
+        window.location.href = session.url;
+        return;
       }
 
-      const stripe = await stripePromise;
-      const { error } = await stripe.redirectToCheckout({ sessionId: session.sessionId });
-
-      if (error) {
-        console.error('Stripe redirect error:', error);
-        alert('Payment failed. Please try again.');
+      // Fallback (not recommended): if backend returns sessionId, try legacy redirect
+      if (session.sessionId) {
+        const stripe = await stripePromise;
+        if (!stripe) throw new Error('Stripe failed to initialize.');
+        // NOTE: this may be unsupported in some stripe.js versions
+        const { error } = await stripe.redirectToCheckout({ sessionId: session.sessionId });
+        if (error) throw error;
+        return;
       }
+
+      throw new Error(session.message || 'No checkout URL returned from server.');
     } catch (err) {
       console.error('Subscription error:', err);
       alert(err.message || 'Something went wrong. Please try again.');
