@@ -18,7 +18,6 @@ export default function Navigation({
   const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
   const cardBg = darkMode ? 'bg-gray-800' : 'bg-white';
 
-  // small click debug helper
   const onNavigate = (path) => {
     console.log('nav click ->', path);
     navigate(path);
@@ -28,7 +27,7 @@ export default function Navigation({
     `px-2 py-1 rounded ${isActive ? 'text-indigo-600 font-semibold' : textSecondary}`;
 
   return (
-    <nav className={`${cardBg} shadow-lg`}>
+    <nav className={`${cardBg} shadow-lg z-50`}>
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
@@ -38,7 +37,6 @@ export default function Navigation({
 
           {user && (
             <div className="hidden md:flex items-center space-x-6">
-              {/* Use NavLink so Router handles active state and navigation reliably */}
               <NavLink to="/dashboard" className={linkClass} onClick={() => onNavigate('/dashboard')}>
                 Dashboard
               </NavLink>
