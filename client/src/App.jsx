@@ -193,7 +193,7 @@ const AppContent = () => {
           path="/plans" 
           element={
             user ? (
-              <Plans handleSubscribe={handleSubscribe} darkMode={darkMode} />
+              <Plans user={user} handleSubscribe={handleSubscribe} darkMode={darkMode} />
             ) : (
               <Navigate to="/login" replace />
             )

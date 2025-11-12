@@ -2,14 +2,17 @@
 import React, { useState, useEffect } from 'react';
 import { Check, Loader2 } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
+import { useNavigate } from 'react-router-dom';
 
 // Initialize Stripe (replace with your publishable key)
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_YOUR_PUBLISHABLE_KEY_HERE');
 
-export default function Plans({ darkMode, subscription, user }) {
+export default function Plans({ darkMode, subscription, user: propUser }) {
+  const navigate = useNavigate();
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // fallback mock plans
   const mockPlans = [
     { id: '1', name: 'Starter', price: 9.99, priceId: 'price_starter_test', duration: 30, features: ['5 Projects', 'Basic Support', '10GB Storage', 'Email Reports'] },
     { id: '2', name: 'Professional', price: 29.99, priceId: 'price_professional_test', duration: 30, features: ['Unlimited Projects', 'Priority Support', '100GB Storage', 'Advanced Analytics', 'Custom Domain'] },
@@ -20,14 +23,32 @@ export default function Plans({ darkMode, subscription, user }) {
     if (subscription?.planId) setSelectedPlan(subscription.planId);
   }, [subscription]);
 
+  // Resolve the current user: prefer prop, else try localStorage
+  const getCurrentUser = () => {
+    if (propUser) return propUser;
+    try {
+      return JSON.parse(localStorage.getItem('user') || 'null');
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const currentUser = getCurrentUser();
+
   const cardBg = darkMode ? 'bg-gray-800' : 'bg-white';
   const textClass = darkMode ? 'text-gray-100' : 'text-gray-900';
   const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
 
   const handleSubscribe = async (plan) => {
     if (loading) return;
-    if (!user) {
+
+    // Re-resolve user at click time (in case it changed)
+    const userNow = getCurrentUser();
+    if (!userNow) {
+      // friendly: redirect to login page (client-side)
+      // you can also show a toast instead of alert
       alert('Please login to subscribe');
+      navigate('/login');
       return;
     }
 
@@ -35,14 +56,27 @@ export default function Plans({ darkMode, subscription, user }) {
     setSelectedPlan(plan.id);
 
     try {
-      const resp = await fetch('/api/create-checkout-session', {
+      // Make backend URL explicit so we don't call frontend server by mistake
+      const API_ROOT = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') || '';
+      const url = API_ROOT ? `${API_ROOT}/api/create-checkout-session` : `/api/create-checkout-session`;
+
+      // Read access token from localStorage (ensure backend auth expects it)
+      const token = localStorage.getItem('accessToken');
+
+      const resp = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ planId: plan.id, priceId: plan.priceId, userId: user.id })
+        body: JSON.stringify({ planId: plan.id, priceId: plan.priceId, userId: userNow.id })
       });
+
+      // if network or server failure
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        throw new Error(`Server responded ${resp.status}: ${text || resp.statusText}`);
+      }
 
       const session = await resp.json();
 
@@ -59,7 +93,7 @@ export default function Plans({ darkMode, subscription, user }) {
       }
     } catch (err) {
       console.error('Subscription error:', err);
-      alert('Something went wrong. Please try again.');
+      alert(err.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
