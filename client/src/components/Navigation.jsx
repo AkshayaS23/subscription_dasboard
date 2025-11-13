@@ -34,37 +34,37 @@ export default function Navigation({
           </div>
 
           {user && (
-            <div className="hidden md:flex items-center space-x-6">
+          <div className="hidden md:flex items-center space-x-6">
 
-              {/* Always show Dashboard for both user & admin */}
-              <NavLink to="/dashboard" className={linkClass}>
-                Dashboard
+            {/* Always show Dashboard for both user & admin */}
+            <NavLink to="/dashboard" className={linkClass}>
+              Dashboard
+            </NavLink>
+
+            {/* Show Plans ONLY for normal users */}
+            {user.role === "user" && (
+              <NavLink to="/plans" className={linkClass}>
+                Plans
               </NavLink>
+            )}
 
-              {/* Show Plans ONLY for normal users */}
-              {user.role === "user" && (
-                <NavLink to="/plans" className={linkClass}>
-                  Plans
+            {/* Admin-only links */}
+            {user.role === "admin" && (
+              <>
+                <NavLink to="/admin" className={linkClass}>
+                  Admin Dashboard
                 </NavLink>
-              )}
 
-              {/* Admin-only links */}
-              {user.role === "admin" && (
-                <>
-                  <NavLink to="/admin" className={linkClass}>
-                    Admin Dashboard
-                  </NavLink>
+                <NavLink to="/admin/plans" className={linkClass}>
+                  Manage Plans
+                </NavLink>
 
-                  <NavLink to="/admin/plans" className={linkClass}>
-                    Manage Plans
-                  </NavLink>
-
-                  <NavLink to="/admin/subscriptions" className={linkClass}>
-                    Subscriptions
-                  </NavLink>
-                </>
-              )}
-            </div>
+                <NavLink to="/admin/subscriptions" className={linkClass}>
+                  Subscriptions
+                </NavLink>
+              </>
+            )}
+          </div>
 )}
 
 
