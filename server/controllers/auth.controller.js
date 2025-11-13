@@ -26,7 +26,8 @@ const generateTokens = (userId) => {
   return { accessToken, refreshToken };
 };
 
-// Register User
+// @desc    Register user
+// @route   POST /api/auth/register
 exports.register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -83,7 +84,8 @@ exports.register = async (req, res) => {
   }
 };
 
-// Login User
+// @desc    Login user
+// @route   POST /api/auth/login
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -129,7 +131,6 @@ exports.login = async (req, res) => {
 
     // Save refresh token
     user.refreshToken = refreshToken;
-    // Do not persist password field changes, but ensure save only updates refreshToken
     await user.save();
 
     return res.status(200).json({
@@ -147,7 +148,6 @@ exports.login = async (req, res) => {
       }
     });
   } catch (error) {
-    // Strong logging so Vercel shows full stack
     console.error('❌ Login failed:', error && error.stack ? error.stack : error);
     return res.status(500).json({
       success: false,
@@ -157,7 +157,101 @@ exports.login = async (req, res) => {
   }
 };
 
-// Refresh Token
+// @desc    Get current user profile
+// @route   GET /api/auth/me
+exports.getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('❌ Get profile failed:', error && error.stack ? error.stack : error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch user',
+      error: error.message || String(error)
+    });
+  }
+};
+
+// @desc    Update user profile
+// @route   PUT /api/auth/me
+exports.updateProfile = async (req, res) => {
+  try {
+    const { name, email } = req.body;
+
+    // Validate input
+    if (!name || !email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name and email are required'
+      });
+    }
+
+    // Check if email is already taken by another user
+    if (email !== req.user.email) {
+      const existingUser = await User.findOne({ email });
+      if (existingUser && existingUser._id.toString() !== req.user.id) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email is already in use'
+        });
+      }
+    }
+
+    // Update user
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { name, email },
+      { new: true, runValidators: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: {
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role
+        }
+      }
+    });
+  } catch (error) {
+    console.error('❌ Update profile failed:', error && error.stack ? error.stack : error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update profile',
+      error: error.message || String(error)
+    });
+  }
+};
+
+// @desc    Refresh Token
+// @route   POST /api/auth/refresh-token
 exports.refreshToken = async (req, res) => {
   try {
     const { refreshToken } = req.body;
@@ -209,7 +303,8 @@ exports.refreshToken = async (req, res) => {
   }
 };
 
-// Logout
+// @desc    Logout user
+// @route   POST /api/auth/logout
 exports.logout = async (req, res) => {
   try {
     // ensure req.user is present (authenticate middleware should set it)

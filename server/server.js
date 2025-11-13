@@ -9,11 +9,11 @@ dotenv.config();
 const authRoutes = require('./routes/auth.routes');
 const planRoutes = require('./routes/plan.routes');
 const subscriptionRoutes = require('./routes/subscription.routes');
-const paymentRoutes = require('./routes/payment.routes'); // <-- payment routes (webhook + payment endpoints)
+const paymentRoutes = require('./routes/payment.routes');
 
 const app = express();
 
-// Middleware
+// Middleware - CORS
 const FRONTEND_ORIGIN = process.env.CLIENT_URL || 'http://localhost:5173';
 
 app.use(cors({
@@ -21,21 +21,20 @@ app.use(cors({
   credentials: true,
 }));
 
-
-// IMPORTANT: raw body parser for Stripe webhooks must be mounted BEFORE express.json()
-// This ensures the /api/webhook route receives the raw request body required for signature verification.
+// CRITICAL: Raw body parser for Stripe webhooks MUST come BEFORE express.json()
+// This ensures /api/webhook receives the raw request body for signature verification
 app.use('/api/webhook', express.raw({ type: 'application/json' }));
 
 // JSON parsers for all other routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// DB connection (robust)
+// MongoDB Connection
 const MONGO_URI = process.env.MONGODB_URI;
 const DB_NAME = process.env.MONGO_DB_NAME || 'subscription_dashboard';
 
 if (!MONGO_URI) {
-  console.error('❌ MONGO_URI not set in environment');
+  console.error('❌ MONGODB_URI not set in environment');
   process.exit(1);
 }
 
@@ -45,47 +44,78 @@ const connectWithRetry = async () => {
       dbName: DB_NAME,
       useNewUrlParser: true,
       useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 30000, // 30s
+      serverSelectionTimeoutMS: 30000,
     });
     console.log('✅ MongoDB Connected Successfully');
+    console.log(`📦 Database: ${DB_NAME}`);
   } catch (err) {
     console.error('❌ MongoDB Connection Error:', err.message || err);
     console.error('Full error:', err);
-    process.exit(1); // or retry if you prefer
+    process.exit(1);
   }
 };
 
 connectWithRetry();
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/plans', planRoutes);
-app.use('/api', subscriptionRoutes);
-
-// Mount payment routes (these include create-checkout-session and payment-success).
-// Note: webhook route path is /api/webhook and will use the raw body parser we mounted earlier.
+// Routes - ORDER MATTERS!
+// 1. Payment routes (includes webhook) - must be first for raw body
 app.use('/api', paymentRoutes);
+
+// 2. Auth routes
+app.use('/api/auth', authRoutes);
+
+// 3. Plan routes
+app.use('/api/plans', planRoutes);
+
+// 4. Subscription routes - FIXED: mount at /api/subscriptions
+app.use('/api/subscriptions', subscriptionRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Server is running' });
+  res.json({ 
+    status: 'OK', 
+    message: 'Server is running',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 // Root route
 app.get('/', (req, res) => {
-  res.send('🚀 Server is live and running on Vercel!');
+  res.send('🚀 Subscription Dashboard API is live and running!');
+});
+
+// 404 Handler - must come before error handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.path}`,
+    availableRoutes: [
+      'POST   /api/auth/register',
+      'POST   /api/auth/login',
+      'GET    /api/auth/me',
+      'PUT    /api/auth/me',
+      'POST   /api/auth/logout',
+      'GET    /api/plans',
+      'GET    /api/subscriptions/me',
+      'POST   /api/create-checkout-session',
+      'POST   /api/webhook',
+    ]
+  });
 });
 
 // Error Handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('❌ Error:', err.stack);
   res.status(err.status || 500).json({
     success: false,
     message: err.message || 'Internal Server Error',
-    error: process.env.NODE_ENV === 'development' ? err : {}
+    ...(process.env.NODE_ENV === 'development' && { 
+      stack: err.stack,
+      error: err 
+    })
   });
 });
-
 
 const PORT = process.env.PORT || 5000;
 
@@ -93,13 +123,22 @@ if (require.main === module) {
   // Running directly (locally) -> start server
   const server = app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🌐 Frontend URL: ${FRONTEND_ORIGIN}`);
+    console.log(`📊 API Routes:`);
+    console.log(`   - Auth:          /api/auth/*`);
+    console.log(`   - Plans:         /api/plans/*`);
+    console.log(`   - Subscriptions: /api/subscriptions/*`);
+    console.log(`   - Payments:      /api/create-checkout-session`);
+    console.log(`   - Webhook:       /api/webhook`);
   });
 
   const shutdown = () => {
-    console.log('Shutting down server...');
+    console.log('\n⏳ Shutting down server gracefully...');
     server.close(() => {
       mongoose.connection.close(false, () => {
-        console.log('MongoDB connection closed.');
+        console.log('✅ MongoDB connection closed.');
+        console.log('👋 Server shutdown complete.');
         process.exit(0);
       });
     });
@@ -108,8 +147,6 @@ if (require.main === module) {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 } else {
-  // Imported by Vercel -> export a handler function
-  // Vercel expects `module.exports = (req, res) => { ... }`
+  // Imported by Vercel -> export handler
   module.exports = (req, res) => app(req, res);
 }
-

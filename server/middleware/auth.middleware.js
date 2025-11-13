@@ -2,7 +2,8 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// Verify JWT Token
+// @desc    Verify JWT Token
+// @access  Used in protected routes
 exports.authenticate = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
@@ -48,7 +49,8 @@ exports.authenticate = async (req, res, next) => {
   }
 };
 
-// Role-based authorization
+// @desc    Role-based authorization
+// @usage   authorize('admin'), authorize('user', 'admin')
 exports.authorize = (...roles) => {
   return (req, res, next) => {
     if (!req.user) {
@@ -68,3 +70,45 @@ exports.authorize = (...roles) => {
     next();
   };
 };
+
+// @desc    Check if user has active subscription
+// @access  Used in routes that require subscription
+// @critical SKIPS CHECK FOR ADMIN USERS (Issue #1 fix!)
+exports.checkSubscription = async (req, res, next) => {
+  try {
+    // CRITICAL: Skip subscription check for admin users
+    if (req.user && req.user.role === 'admin') {
+      console.log(`✅ Admin user ${req.user.email} bypassing subscription check`);
+      return next();
+    }
+
+    const Subscription = require('../models/Subscription');
+    
+    const subscription = await Subscription.findOne({
+      user: req.user.id,
+      status: 'active',
+      endDate: { $gt: new Date() }
+    });
+
+    if (!subscription) {
+      return res.status(403).json({
+        success: false,
+        message: 'Active subscription required to access this resource',
+        requiresSubscription: true
+      });
+    }
+
+    req.subscription = subscription;
+    next();
+  } catch (error) {
+    console.error('❌ Subscription check failed:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Subscription verification failed',
+      error: error.message
+    });
+  }
+};
+
+// Alias for backwards compatibility (if you use 'protect' anywhere)
+exports.protect = exports.authenticate;

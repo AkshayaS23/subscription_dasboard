@@ -1,7 +1,7 @@
 // client/src/pages/Dashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, Check, X, Edit2 } from 'lucide-react';
+import { TrendingUp, Check, X, Edit2, Shield } from 'lucide-react';
 import Toast from '../components/Toast';
 import { authAPI } from '../services/api';
 
@@ -12,22 +12,19 @@ export default function Dashboard({ user, subscription: propSubscription, darkMo
   const textClass = darkMode ? 'text-gray-100' : 'text-gray-900';
   const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
 
-  // local editable copy of user fields
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: user?.name || '', email: user?.email || '' });
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
-
-  // subscription state: prefer propSubscription, else local fetch
   const [subscription, setSubscription] = useState(propSubscription || null);
   const [loadingSub, setLoadingSub] = useState(false);
 
-  // keep form in sync if parent user changes
+  const isAdmin = user?.role === 'admin';
+
   useEffect(() => {
     setForm({ name: user?.name || '', email: user?.email || '' });
   }, [user?.name, user?.email]);
 
-  // keep local subscription updated when parent gives a prop
   useEffect(() => {
     if (propSubscription) {
       setSubscription(propSubscription);
@@ -37,48 +34,56 @@ export default function Dashboard({ user, subscription: propSubscription, darkMo
     }
   }, [propSubscription]);
 
-  // If no subscription prop, fetch from backend on mount
-useEffect(() => {
-  let mounted = true;
-  const loadSubscription = async () => {
-    if (propSubscription) return;
-
-    setLoadingSub(true);
-    try {
-      const token = localStorage.getItem('accessToken');
-      const API_ROOT = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || '';
-
-      const res = await fetch(`${API_ROOT}/api/subscriptions/me`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-
-      if (!mounted) return;
-
-      const data = await res.json();
-      console.log("Fetched subscription data:", data);
-
-      if (data && data.subscription) {
-        setSubscription(data.subscription);
-        localStorage.setItem('subscription', JSON.stringify(data.subscription));
-      } else {
+  useEffect(() => {
+    let mounted = true;
+    const loadSubscription = async () => {
+      // Skip subscription fetch for admin users
+      if (isAdmin) {
+        setLoadingSub(false);
         setSubscription(null);
-        localStorage.removeItem('subscription');
+        return;
       }
-    } catch (err) {
-      console.error('Error fetching subscription:', err);
-    } finally {
-      if (mounted) setLoadingSub(false);
-    }
-  };
 
-  loadSubscription();
-  return () => { mounted = false; };
-}, [propSubscription]);
+      if (propSubscription) return;
 
+      setLoadingSub(true);
+      try {
+        const token = localStorage.getItem('accessToken');
+        const API_ROOT = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || '';
+
+        const res = await fetch(`${API_ROOT}/api/subscriptions/me`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+
+        if (!mounted) return;
+
+        const data = await res.json();
+        console.log("Fetched subscription data:", data);
+
+        if (data && data.subscription) {
+          setSubscription(data.subscription);
+          localStorage.setItem('subscription', JSON.stringify(data.subscription));
+        } else {
+          setSubscription(null);
+          localStorage.removeItem('subscription');
+        }
+      } catch (err) {
+        console.error('Error fetching subscription:', err);
+        if (mounted) {
+          setSubscription(null);
+        }
+      } finally {
+        if (mounted) setLoadingSub(false);
+      }
+    };
+
+    loadSubscription();
+    return () => { mounted = false; };
+  }, [propSubscription, isAdmin]);
 
   const showToast = (message, type = 'info', duration = 4000) => {
     const id = Date.now().toString();
@@ -91,7 +96,6 @@ useEffect(() => {
       showToast('Name and Email are required.', 'warning', 3500);
       return false;
     }
-    // simple email regex
     const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRe.test(form.email.trim())) {
       showToast('Please enter a valid email address.', 'warning', 3500);
@@ -105,17 +109,14 @@ useEffect(() => {
 
     setLoading(true);
     try {
-      // call backend to update profile
       const res = await authAPI.updateProfile({
         name: form.name.trim(),
         email: form.email.trim(),
       });
 
-      // assume backend returns { data: { /* user */ } } or { data: user }
       const updated = res?.data?.data || res?.data;
       const updatedUser = updated?.user || updated;
 
-      // update localStorage
       if (updatedUser) {
         const stored = { ...JSON.parse(localStorage.getItem('user') || '{}'), ...updatedUser };
         localStorage.setItem('user', JSON.stringify(stored));
@@ -124,7 +125,6 @@ useEffect(() => {
         localStorage.setItem('user', JSON.stringify(fallback));
       }
 
-      // update parent state if setter provided
       if (typeof setUser === 'function') {
         try {
           setUser(updatedUser || { ...user, name: form.name.trim(), email: form.email.trim() });
@@ -186,11 +186,13 @@ useEffect(() => {
               </div>
               <div>
                 <p className={textSecondary}>Role</p>
-                <p className={`${textClass} font-semibold capitalize`}>{user?.role}</p>
+                <div className="flex items-center gap-2">
+                  <p className={`${textClass} font-semibold capitalize`}>{user?.role}</p>
+                  {isAdmin && <Shield className="w-5 h-5 text-indigo-600" />}
+                </div>
               </div>
             </div>
           ) : (
-            // Edit form
             <div className="space-y-4">
               <div>
                 <label className={`block mb-2 ${textClass}`}>Full Name <span className="text-red-500">*</span></label>
@@ -214,7 +216,7 @@ useEffect(() => {
                 <button
                   onClick={handleSave}
                   disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
                 >
                   <Check className="w-4 h-4" />
                   <span>{loading ? 'Saving...' : 'Save'}</span>
@@ -223,7 +225,7 @@ useEffect(() => {
                 <button
                   onClick={handleCancel}
                   disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50"
                 >
                   <X className="w-4 h-4" />
                   <span>Cancel</span>
@@ -237,8 +239,17 @@ useEffect(() => {
         <div className={`${cardBg} rounded-2xl shadow-xl p-8`}>
           <h3 className={`text-xl font-bold ${textClass} mb-4`}>Subscription Status</h3>
 
-          {loadingSub ? (
-            <div>Loading subscription...</div>
+          {isAdmin ? (
+            <div className="text-center py-8">
+              <Shield className="w-16 h-16 text-indigo-600 mx-auto mb-4" />
+              <p className={`${textClass} font-semibold mb-2`}>Admin Access</p>
+              <p className={`${textSecondary} text-sm`}>You have full access to all features as an administrator</p>
+            </div>
+          ) : loadingSub ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+              <p className={`${textSecondary} mt-4`}>Loading subscription...</p>
+            </div>
           ) : subscription ? (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -264,7 +275,10 @@ useEffect(() => {
           ) : (
             <div className="text-center py-8">
               <p className={`${textSecondary} mb-4`}>No active subscription</p>
-              <button onClick={() => navigate('/plans')} className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold cursor-pointer">
+              <button 
+                onClick={() => navigate('/plans')} 
+                className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold"
+              >
                 Browse Plans
               </button>
             </div>
