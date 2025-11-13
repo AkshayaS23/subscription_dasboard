@@ -8,7 +8,6 @@ import Plans from './pages/Plans';
 import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminPlans from './pages/AdminPlans';
-import AdminSubscriptions from './pages/AdminSubscriptions';
 import { mockPlans } from './utils/mockPlans';
 import { loginMock, registerMock } from './services/auth';
 import { useLocalStorage } from './utils/useLocalStorage';
@@ -238,7 +237,7 @@ const AppContent = () => {
             )
           } 
         />
-        
+{/*         
         <Route 
           path="/admin/subscriptions" 
           element={
@@ -248,7 +247,7 @@ const AppContent = () => {
               <Navigate to="/dashboard" replace />
             )
           } 
-        />
+        /> */}
 
         {/* Default & Catch-all Routes */}
         <Route 
