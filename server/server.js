@@ -71,6 +71,7 @@ app.use('/api/plans', planRoutes);
 // 4. Subscription routes - FIXED: mount at /api/subscriptions
 app.use('/api/subscriptions', subscriptionRoutes);
 
+app.use('/api', usersRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {
