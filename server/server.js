@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth.routes');
 const planRoutes = require('./routes/plan.routes');
 const subscriptionRoutes = require('./routes/subscription.routes');
 const paymentRoutes = require('./routes/payment.routes');
+const usersRoutes = require('./routes/users.routes');
 
 const app = express();
 
@@ -69,6 +70,8 @@ app.use('/api/plans', planRoutes);
 
 // 4. Subscription routes - FIXED: mount at /api/subscriptions
 app.use('/api/subscriptions', subscriptionRoutes);
+
+app.use('/api', usersRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {
