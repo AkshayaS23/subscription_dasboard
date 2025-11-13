@@ -16,57 +16,81 @@ export default function AdminDashboard({ darkMode }) {
   const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
 
   useEffect(() => {
+    // Load on mount
     fetchStats();
+
+    // Listen to BroadcastChannel events from admin actions / other tabs
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      const bc = new BroadcastChannel('submanager');
+      const onMessage = (ev) => {
+        // If users/plans/subscriptions updated elsewhere, re-fetch stats
+        if (!ev?.data) return;
+        const type = ev.data.type;
+        if (type === 'plans-updated' || type === 'subscriptions-updated' || type === 'users-updated') {
+          fetchStats();
+        }
+      };
+      bc.addEventListener('message', onMessage);
+      return () => {
+        bc.removeEventListener('message', onMessage);
+        bc.close();
+      };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchStats = async () => {
     try {
+      setLoading(true);
       const token = localStorage.getItem('accessToken');
       const API_ROOT = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || '';
 
-      // Fetch all stats in parallel
+      // request URLs
+      const usersUrl = `${API_ROOT}/api/users`;
+      const subsUrl = `${API_ROOT}/api/subscriptions`;
+      const plansUrl = `${API_ROOT}/api/plans`;
+
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
       const [usersRes, subsRes, plansRes] = await Promise.all([
-        fetch(`${API_ROOT}/api/users`, {
-          headers: { 
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        }),
-        fetch(`${API_ROOT}/api/subscriptions`, {
-          headers: { 
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        }),
-        fetch(`${API_ROOT}/api/plans`, {
-          headers: { 
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        }),
+        fetch(usersUrl, { headers }),
+        fetch(subsUrl, { headers }),
+        fetch(plansUrl, { headers }),
       ]);
 
-      const usersData = await usersRes.json();
-      const subsData = await subsRes.json();
-      const plansData = await plansRes.json();
+      // safe json parse with fallback
+      const safeJson = async (r) => {
+        try { return await r.json(); } catch (e) { return null; }
+      };
 
+      const usersData = await safeJson(usersRes);
+      const subsData = await safeJson(subsRes);
+      const plansData = await safeJson(plansRes);
+
+      // Normalize shapes (some endpoints return { data: [...] } or just [...])
       const users = usersData?.data || usersData?.users || usersData || [];
       const subscriptions = subsData?.data || subsData?.subscriptions || subsData || [];
       const plans = plansData?.data || plansData?.plans || plansData || [];
 
-      // Calculate revenue (sum of active subscription prices)
-      const revenue = subscriptions
-        .filter(sub => sub.status === 'active')
+      // compute revenue defensively
+      const revenue = (Array.isArray(subscriptions) ? subscriptions : [])
+        .filter(s => s && s.status === 'active')
         .reduce((sum, sub) => {
-          const price = sub.plan?.price || 0;
+          // try multiple shape options for price
+          const price = Number(sub?.plan?.price ?? sub?.price ?? 0) || 0;
           return sum + price;
         }, 0);
 
       setStats({
-        totalUsers: users.length,
-        activeSubscriptions: subscriptions.filter(s => s.status === 'active').length,
-        totalPlans: plans.length,
-        revenue: revenue,
+        totalUsers: Array.isArray(users) ? users.length : (users.count ?? users.total ?? 0),
+        activeSubscriptions: Array.isArray(subscriptions) ?
+          subscriptions.filter(s => s && s.status === 'active').length
+          : (subscriptions.count ?? subscriptions.active ?? 0),
+        totalPlans: Array.isArray(plans) ? plans.length : (plans.count ?? plans.total ?? 0),
+        revenue,
       });
     } catch (err) {
       console.error('Error fetching stats:', err);
@@ -139,7 +163,7 @@ export default function AdminDashboard({ darkMode }) {
             <span className={`text-sm ${textSecondary}`}>Revenue</span>
           </div>
           <h3 className={`text-3xl font-bold ${textClass} mb-1`}>
-            ${stats.revenue.toLocaleString()}
+            ${Number(stats.revenue || 0).toLocaleString()}
           </h3>
           <p className={`text-sm ${textSecondary}`}>Total Active Revenue</p>
         </div>

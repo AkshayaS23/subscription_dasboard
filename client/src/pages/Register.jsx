@@ -52,6 +52,17 @@ export default function Register({ registerForm, setRegisterForm, darkMode, setL
         setLoginForm((prev) => ({ ...prev, email: registerForm.email.trim(), password: '' }));
       }
 
+      // Broadcast to other tabs that users were updated (so admin dashboard can refresh)
+      try {
+        if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+          const bc = new BroadcastChannel('submanager');
+          bc.postMessage({ type: 'users-updated' });
+          bc.close();
+        }
+      } catch (e) {
+        // ignore errors from BroadcastChannel in older browsers
+      }
+
       // Clear the register form (optional)
       setRegisterForm({ name: '', email: '', password: '' });
       setConfirmPassword('');
