@@ -66,4 +66,6 @@ export const planAPI = {
   delete: (id) => api.delete(`/api/plans/${id}`),
 };
 
+export const subscriptionsAPI = subscriptionAPI; // alias for backward compatibility
+
 export default api;
