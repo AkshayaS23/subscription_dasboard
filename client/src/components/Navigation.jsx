@@ -19,8 +19,8 @@ export default function Navigation({
 
   const linkClass = ({ isActive }) =>
     `px-3 py-2 rounded-lg transition-colors ${
-      isActive 
-        ? 'text-indigo-600 font-semibold bg-indigo-50 dark:bg-indigo-900/20' 
+      isActive
+        ? 'text-indigo-600 font-semibold bg-indigo-50 dark:bg-indigo-900/20'
         : `${textSecondary} hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/10`
     }`;
 
@@ -28,50 +28,70 @@ export default function Navigation({
     <nav className={`${cardBg} shadow-lg z-50`}>
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
+          {/* Brand */}
           <div className="flex items-center space-x-2">
             <Crown className="w-8 h-8 text-indigo-600" />
             <span className={`text-xl font-bold ${textClass}`}>SubManager</span>
           </div>
 
-          {user && (
-          <div className="hidden md:flex items-center space-x-6">
-
-            {/* Always show Dashboard for both user & admin */}
-            <NavLink to="/dashboard" className={linkClass}>
-              Dashboard
-            </NavLink>
-
-            {/* Show Plans ONLY for normal users */}
-            {user.role === "user" && (
-              <NavLink to="/plans" className={linkClass}>
-                Plans
+          {/* Desktop links (only show when user exists) */}
+          {user ? (
+            <div className="hidden md:flex items-center space-x-6">
+              {/* Always visible */}
+              <NavLink to="/dashboard" className={linkClass}>
+                Dashboard
               </NavLink>
-            )}
 
-            {/* Admin-only links */}
-            {user.role === "admin" && (
-              <>
-                <NavLink to="/admin" className={linkClass}>
-                  Admin Dashboard
+              {/* Normal user */}
+              {user.role === 'user' && (
+                <NavLink to="/plans" className={linkClass}>
+                  Plans
                 </NavLink>
+              )}
 
-                <NavLink to="/admin/plans" className={linkClass}>
-                  Manage Plans
-                </NavLink>
+              {/* Admin only */}
+              {user.role === 'admin' && (
+                <>
+                  <NavLink to="/admin" className={linkClass}>
+                    Admin Dashboard
+                  </NavLink>
+                  <NavLink to="/admin/plans" className={linkClass}>
+                    Manage Plans
+                  </NavLink>
+                  <NavLink to="/admin/subscriptions" className={linkClass}>
+                    Subscriptions
+                  </NavLink>
+                </>
+              )}
+            </div>
+          ) : (
+            // If you want links for unauthenticated users, add them here.
+            <div className="hidden md:flex items-center space-x-6">
+              <NavLink to="/login" className={linkClass}>Login</NavLink>
+              <NavLink to="/register" className={linkClass}>Sign Up</NavLink>
+            </div>
+          )}
 
-                <NavLink to="/admin/subscriptions" className={linkClass}>
-                  Subscriptions
-                </NavLink>
-              </>
-            )}
-          </div>
-)}
+          {/* Right-side controls (username, theme, logout) — show only when user exists */}
+          {user ? (
+            <div className="hidden md:flex items-center space-x-4">
+              <span className={`${textSecondary} text-sm`}>{user.name}</span>
+              <ThemeToggle darkMode={darkMode} setDarkMode={setDarkMode} />
+              <button
+                onClick={handleLogout}
+                className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Logout</span>
+              </button>
+            </div>
+          ) : null}
 
-
+          {/* Mobile menu toggle (visible when user exists) */}
           {user && (
-            <button 
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)} 
-              className="md:hidden" 
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden"
               aria-label="mobile-menu-toggle"
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -79,6 +99,7 @@ export default function Navigation({
           )}
         </div>
 
+        {/* Mobile menu component (it will internally handle user/nav rendering) */}
         <MobileMenu
           user={user}
           mobileMenuOpen={mobileMenuOpen}
