@@ -168,7 +168,7 @@ export default function Login({ loginForm, setLoginForm, handleLogin, darkMode }
         </p>
 
         <div className={`mt-4 p-3 ${darkMode ? 'bg-gray-700' : 'bg-blue-50'} rounded text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-          <p>Demo: admin@test.com / adminpass (admin) or user@test.com / userpass (user)</p>
+          <p>admin login info: admin@gmail.com / adminpass (admin)</p>
         </div>
       </div>
     </div>
