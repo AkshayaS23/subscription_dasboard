@@ -16,56 +16,26 @@ export default function AdminDashboard({ darkMode }) {
   const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
 
   useEffect(() => {
-    // initial load
+    // Load on mount
     fetchStats();
 
-    // BroadcastChannel listener
-    let bc;
-    const bcHandler = (ev) => {
-      if (!ev?.data) return;
-      console.log('[AdminDashboard] BroadcastChannel message:', ev.data);
-      const type = ev.data.type;
-      if (type === 'plans-updated' || type === 'subscriptions-updated' || type === 'users-updated') {
-        fetchStats();
-      }
-    };
-
+    // Listen to BroadcastChannel events from admin actions / other tabs
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-      try {
-        bc = new BroadcastChannel('submanager');
-        bc.addEventListener('message', bcHandler);
-        console.log('[AdminDashboard] BroadcastChannel opened');
-      } catch (e) {
-        console.warn('[AdminDashboard] BroadcastChannel open failed', e);
-      }
-    } else {
-      console.log('[AdminDashboard] BroadcastChannel not supported');
-    }
-
-    // storage event fallback
-    const onStorage = (e) => {
-      if (!e) return;
-      // we expect keys like users-updated-at, plans-updated-at, subscriptions-updated-at
-      if (e.key === 'users-updated-at' || e.key === 'plans-updated-at' || e.key === 'subscriptions-updated-at') {
-        console.log('[AdminDashboard] storage event detected:', e.key, e.newValue);
-        fetchStats();
-      }
-    };
-    window.addEventListener('storage', onStorage);
-
-    // cleanup
-    return () => {
-      if (bc) {
-        try {
-          bc.removeEventListener('message', bcHandler);
-          bc.close();
-          console.log('[AdminDashboard] BroadcastChannel closed');
-        } catch (e) {
-          // ignore
+      const bc = new BroadcastChannel('submanager');
+      const onMessage = (ev) => {
+        // If users/plans/subscriptions updated elsewhere, re-fetch stats
+        if (!ev?.data) return;
+        const type = ev.data.type;
+        if (type === 'plans-updated' || type === 'subscriptions-updated' || type === 'users-updated') {
+          fetchStats();
         }
-      }
-      window.removeEventListener('storage', onStorage);
-    };
+      };
+      bc.addEventListener('message', onMessage);
+      return () => {
+        bc.removeEventListener('message', onMessage);
+        bc.close();
+      };
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -75,6 +45,7 @@ export default function AdminDashboard({ darkMode }) {
       const token = localStorage.getItem('accessToken');
       const API_ROOT = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || '';
 
+      // request URLs
       const usersUrl = `${API_ROOT}/api/users`;
       const subsUrl = `${API_ROOT}/api/subscriptions`;
       const plansUrl = `${API_ROOT}/api/plans`;
@@ -84,22 +55,13 @@ export default function AdminDashboard({ darkMode }) {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
-      console.log('[AdminDashboard] fetching stats from', { usersUrl, subsUrl, plansUrl, tokenPresent: !!token });
-
       const [usersRes, subsRes, plansRes] = await Promise.all([
         fetch(usersUrl, { headers }),
         fetch(subsUrl, { headers }),
         fetch(plansUrl, { headers }),
       ]);
 
-      // debug the status codes
-      console.log('[AdminDashboard] responses status:', {
-        users: usersRes.status,
-        subs: subsRes.status,
-        plans: plansRes.status
-      });
-
-      // parse with try/catch
+      // safe json parse with fallback
       const safeJson = async (r) => {
         try { return await r.json(); } catch (e) { return null; }
       };
@@ -108,27 +70,30 @@ export default function AdminDashboard({ darkMode }) {
       const subsData = await safeJson(subsRes);
       const plansData = await safeJson(plansRes);
 
-      console.log('[AdminDashboard] responses bodies:', { usersData, subsData, plansData });
-
+      // Normalize shapes (some endpoints return { data: [...] } or just [...])
       const users = usersData?.data || usersData?.users || usersData || [];
       const subscriptions = subsData?.data || subsData?.subscriptions || subsData || [];
       const plans = plansData?.data || plansData?.plans || plansData || [];
 
+      // compute revenue defensively
       const revenue = (Array.isArray(subscriptions) ? subscriptions : [])
         .filter(s => s && s.status === 'active')
         .reduce((sum, sub) => {
+          // try multiple shape options for price
           const price = Number(sub?.plan?.price ?? sub?.price ?? 0) || 0;
           return sum + price;
         }, 0);
 
       setStats({
         totalUsers: Array.isArray(users) ? users.length : (users.count ?? users.total ?? 0),
-        activeSubscriptions: Array.isArray(subscriptions) ? subscriptions.filter(s => s && s.status === 'active').length : (subscriptions.count ?? subscriptions.active ?? 0),
+        activeSubscriptions: Array.isArray(subscriptions) ?
+          subscriptions.filter(s => s && s.status === 'active').length
+          : (subscriptions.count ?? subscriptions.active ?? 0),
         totalPlans: Array.isArray(plans) ? plans.length : (plans.count ?? plans.total ?? 0),
         revenue,
       });
     } catch (err) {
-      console.error('[AdminDashboard] Error fetching stats:', err);
+      console.error('Error fetching stats:', err);
     } finally {
       setLoading(false);
     }
