@@ -319,9 +319,9 @@ VITE_API_URL=your-backend-api-url
 ## 👨‍💻 Author
 
 **Your Name**
-- Email: akshayaviswanathan8@gmai.com
-- GitHub: [[@yourusername](https://github.com/yourusername)](https://github.com/AkshayaS23)
-- LinkedIn: [[Your LinkedIn](https://linkedin.com/in/yourprofile)](https://www.linkedin.com/in/akshaya-v-160b442a1/)
+- Email: akshayaviswanathan8@gmail.com
+- GitHub: https://github.com/AkshayaS23
+- LinkedIn: https://www.linkedin.com/in/akshaya-v-160b442a1/
 
 
 
