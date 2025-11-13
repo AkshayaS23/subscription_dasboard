@@ -224,12 +224,12 @@ Frontend runs on: `http://localhost:5173`
 ### Test Credentials
 
 **Admin Account:**
-- Email: `admin@test.com`
-- Password: `admin123`
+- Email: `admin@gmail.com`
+- Password: `adminpass`
 
 **User Account:**
-- Email: `user@test.com`
-- Password: `user123`
+- Email: `user@gmail.com`
+- Password: `Userpass1`
 
 ### API Testing with cURL
 
