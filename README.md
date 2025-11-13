@@ -314,7 +314,12 @@ VITE_API_URL=your-backend-api-url
 - ✅ Dark/Light theme toggle
 - ✅ Plan upgrade/downgrade logic
 - 🔄 Payment integration (Stripe/Razorpay) - Ready for implementation
-- 🔄 Deployment - Ready for deployment
+  
+## 🚀 Live Demo
+
+You can view the live deployed version of the Subscription Dashboard here:
+
+🔗 **Live Site:** https://subscription-dasboard-client.vercel.app/
 
 ## 👨‍💻 Author
 
