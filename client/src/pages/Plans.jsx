@@ -231,14 +231,8 @@ export default function Plans({ darkMode, subscription: propSubscription, user: 
           return (
             <div
               key={planId}
-              className={`
-  ${cardBg} rounded-2xl p-8 shadow-xl border
-  transition-all duration-300 transform
-  hover:scale-105 hover:shadow-2xl hover:border-indigo-400
-  ${isActive ? 'border-4 border-indigo-500 scale-105' : 'border-gray-200'}
-`}
-
-            >
+              className={` ${cardBg} rounded-2xl p-8 shadow-xl border flex flex-col justify-between transition-all duration-300 transform hover:scale-105 hover:shadow-2xl hover:border-indigo-400
+                ${isActive ? 'border-4 border-indigo-500 scale-105' : 'border-gray-200'}`}>
               {index === 1 && <div className="bg-indigo-500 text-white text-sm font-bold px-4 py-1 rounded-full inline-block mb-4">POPULAR</div>}
 
               <h3 className={`text-2xl font-bold ${textClass} mb-2`}>{plan.name}</h3>
