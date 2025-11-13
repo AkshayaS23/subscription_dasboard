@@ -119,7 +119,7 @@ export default function AdminDashboard({ darkMode }) {
         </div>
 
         {/* Total Plans */}
-        {/* <div className={`${cardBg} rounded-xl shadow-lg p-6`}>
+        <div className={`${cardBg} rounded-xl shadow-lg p-6`}>
           <div className="flex items-center justify-between mb-4">
             <div className="p-3 bg-purple-100 dark:bg-purple-900 rounded-lg">
               <TrendingUp className="w-6 h-6 text-purple-600 dark:text-purple-400" />
@@ -128,7 +128,7 @@ export default function AdminDashboard({ darkMode }) {
           </div>
           <h3 className={`text-3xl font-bold ${textClass} mb-1`}>{stats.totalPlans}</h3>
           <p className={`text-sm ${textSecondary}`}>Available Plans</p>
-        </div> */}
+        </div>
 
         {/* Monthly Revenue */}
         <div className={`${cardBg} rounded-xl shadow-lg p-6`}>
