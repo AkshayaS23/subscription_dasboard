@@ -35,41 +35,38 @@ export default function Navigation({
 
           {user && (
             <div className="hidden md:flex items-center space-x-6">
+
+              {/* Always show Dashboard for both user & admin */}
               <NavLink to="/dashboard" className={linkClass}>
                 Dashboard
               </NavLink>
 
-              <NavLink to="/plans" className={linkClass}>
-                Plans
-              </NavLink>
+              {/* Show Plans ONLY for normal users */}
+              {user.role === "user" && (
+                <NavLink to="/plans" className={linkClass}>
+                  Plans
+                </NavLink>
+              )}
 
-              {user.role === 'admin' && (
+              {/* Admin-only links */}
+              {user.role === "admin" && (
                 <>
                   <NavLink to="/admin" className={linkClass}>
                     Admin Dashboard
                   </NavLink>
+
                   <NavLink to="/admin/plans" className={linkClass}>
                     Manage Plans
                   </NavLink>
+
                   <NavLink to="/admin/subscriptions" className={linkClass}>
                     Subscriptions
                   </NavLink>
                 </>
               )}
-
-              <div className="flex items-center space-x-4 ml-4">
-                <span className={`${textSecondary} text-sm`}>{user.name}</span>
-                <ThemeToggle darkMode={darkMode} setDarkMode={setDarkMode} />
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Logout</span>
-                </button>
-              </div>
             </div>
-          )}
+)}
+
 
           {user && (
             <button 
