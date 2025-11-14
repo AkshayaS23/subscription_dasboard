@@ -261,10 +261,10 @@ curl http://localhost:5000/api/plans
 
 ## 🌐 Deployment
 
-### Backend Deployment (Render/Railway)
+### Backend Deployment (vercel/Render/Railway)
 
 1. Push code to GitHub
-2. Connect repository to Render/Railway
+2. Connect repository to vercel/Render/Railway
 3. Set environment variables
 4. Deploy
 
